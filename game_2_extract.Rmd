@@ -8,16 +8,25 @@ output: html_document
 library(tidyverse)
 library(janitor)
 library(moderndive)
+#install.packages("tidyr")
+#install.packages("tidyverse")
+library(tidyr)
+
+
+
 
 options(scipen = 999)
 
 `%not_in%` = Negate(`%in%`)
+
+
+
 ```
 
 ```{r warning=FALSE, message=FALSE}
-movement <- read_csv("data/0021500520.csv")
+movement <- read_csv("/data/p_dsi/nba_player_movement/data_unzipped/data_unzipped/csv_folder/0021500001.csv")
 #events <- read_csv("data/0021500504_e.csv")
-shots <- read_csv("data/shots.csv")
+shots <- read_csv("/data/p_dsi/nba_player_movement/outcome_shots_data/shots.csv")
 ```
 
 
@@ -220,7 +229,7 @@ shot_attempts <- movement_join %>%
 
 
 ```{r}
-p_id_list <- rep(c(-1, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'), nrow(shot_rows))
+p_id_list <- rep(c(-1, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'), nrow(shot_attempts)/11 )
 
 shot_attempts <- add_column(shot_attempts, p_id_list, .after = "team_id")
 
