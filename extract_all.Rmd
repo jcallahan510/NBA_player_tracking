@@ -15,7 +15,6 @@ options(scipen = 999)
 ```
 
 ```{r warning=FALSE, message=FALSE}
-movement <- read_csv("data/0021500520.csv")
 shots <- read_csv("data/shots.csv")
 ```
 
@@ -79,6 +78,8 @@ shot_attempts_all <- NA
 
 
 ```{r}
+movement <- read_csv("data/0021500520.csv")
+
 
 #remove event_id (which is not always correct) and remove duplicate rows from movement df
 movement <- movement %>% 
