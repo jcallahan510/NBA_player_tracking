@@ -77,29 +77,31 @@ shot_times_events <- shot_times_clean %>%
 
 
 
-curr_dir <- '/data/p_dsi/nba_player_movement/data_unzipped/data_unzipped/csv_folder'
+curr_dir <- '/data/p_dsi/nba_player_movement/data_unzipped/data_unzipped/csv_folder_2'
 
-files_batch_1 <- NULL
+files_batch_2 <- NULL
 
 for(i in curr_dir){
   files <- list.files(path = i, pattern = "*.csv", full.names=TRUE, recursive=FALSE)
-  files_batch_1 <- append(files_batch_1, files)
+  files_batch_2 <- append(files_batch_2, files)
 }
 
-#files_batch_1 <- files_batch_1[-20]
+#files_batch_2 <- files_batch_2[-20]
 
 ```
 
 
 
 ```{r}
-shot_attempts_batch_1 <- NULL
+shot_attempts_batch_2 <- NULL
 count <- 0
 
 
-for(i in files_batch_1){
+for(i in files_batch_2){
   
   movement <- read_csv(i)
+  
+  
 
   if (movement$game_id %not_in% shot_times_events$game_id){
   next
@@ -273,7 +275,7 @@ for(i in files_batch_1){
   shot_attempts_final <- shot_attempts_wide %>% 
     left_join(shot_times_clean, by = c("join_clock", "game_id"))
   
-  shot_attempts_batch_1 <- bind_rows(shot_attempts_final, shot_attempts_batch_1)
+  shot_attempts_batch_2 <- bind_rows(shot_attempts_final, shot_attempts_batch_2)
 
   count <- count+1
   print(count)
@@ -284,11 +286,11 @@ for(i in files_batch_1){
 
 
 ```{r}
-shot_attempts_batch_1 %>% 
+shot_attempts_batch_2 %>% 
   group_by(game_id) %>% 
   summarise(n = n())
 
-write.csv(shot_attempts_batch_1, 'shot_attempts_batch_1.csv', row.names = FALSE)
+write.csv(shot_attempts_batch_2, 'shot_attempts_batch_2.csv', row.names = FALSE)
 ```
 
 
@@ -300,17 +302,9 @@ shots_join %>%
 # skipped: 0021500047
 ```
 
-```{r}
-movement %>% 
-  group_by(game_clock, quarter) %>% 
-  summarise(n = n()) %>% 
-  filter(n != 11)
-```
 
-```{r}
-movement %>% 
-  filter(game_clock == 96.14, quarter == 3)
-```
+
+
 
 
 
