@@ -75,26 +75,18 @@ shot_times_events <- shot_times_clean %>%
 
 ```{r}
 
-# dir_list <- c('/data/p_dsi/nba_player_movement/data_feather_file/group1',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group2',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group3',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group4',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group5',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group6',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group7',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group8',
-#               '/data/p_dsi/nba_player_movement/data_feather_file/group9')
+
 
 curr_dir <- '/data/p_dsi/nba_player_movement/data_unzipped/data_unzipped/csv_folder'
 
-files_batch_1 <- NA
+files_batch_1 <- NULL
 
 for(i in curr_dir){
   files <- list.files(path = i, pattern = "*.csv", full.names=TRUE, recursive=FALSE)
   files_batch_1 <- append(files_batch_1, files)
 }
 
-files_batch_1 <- files_batch_1[!is.na(files_batch_1)]
+
 
 ```
 
@@ -232,7 +224,7 @@ for(i in files_batch_1){
   
   # run loop to find the closest match to each shot attempt time estimate
   shot_rows <- data.frame('game_id'=character(), 'q_game_clock'=double())
-  current_row <- NA
+  current_row <- NULL
   for(i in shot_attempt_times$q_release_time){
     current_row <- shot_windows_all %>% 
       filter(row_number()==which.min(abs(q_game_clock-i))) %>% 
