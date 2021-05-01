@@ -417,6 +417,10 @@ shot_attempts_010216_final <- shot_attempts_010216_wide %>%
 ```
 
 
+```{r}
+shot_attempts_010216_final %>% 
+  arrange(event_id)
+```
 
 
 
