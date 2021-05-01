@@ -7,8 +7,9 @@ output: html_document
 library(tidyverse)
 library(janitor)
 library(moderndive)
-#install.packages("raster")
-library(raster)
+#install.packages("LearnGeom")
+library(LearnGeom)
+
 
 options(scipen = 999)
 
@@ -17,35 +18,14 @@ options(scipen = 999)
 ```
 
 ```{r message=FALSE, warning=FALSE}
-shot_attempts_batch_1 <- read_csv("shot_attempts_batch_1.csv")
-shot_attempts_batch_2 <- read_csv("shot_attempts_batch_2.csv")
-shot_attempts_batch_3 <- read_csv("shot_attempts_batch_3.csv")
-shot_attempts_batch_4 <- read_csv("shot_attempts_batch_4.csv")
-shot_attempts_batch_5 <- read_csv("shot_attempts_batch_5.csv")
-```
-
-
-
-```{r message=FALSE, warning=FALSE}
-shot_attempts_all <- bind_rows(shot_attempts_batch_1, shot_attempts_batch_2, shot_attempts_batch_3, shot_attempts_batch_4, shot_attempts_batch_5) 
-
-shot_attempts_all %>% 
-  mutate_at(vars(contains("id")), funs(as.character(.))) %>% 
-  mutate(game_clock = q_game_clock-(quarter*1000)) %>% 
-  select(game_id, quarter, game_clock, everything()) %>% 
-  distinct()
-
-
-shot_attempts_all %>% 
-  group_by(game_id) %>% 
-  summarise(n = n()) %>% 
-  arrange(-n)
+shot_attempts_all <- read_csv("data/shot_attempts_all.csv")
 ```
 
 
 ```{r}
 shot_attempts_all <- shot_attempts_all %>% 
-  mutate(p1_dist_from_ball = sqrt(((ball_x_loc-p1_x_loc)^2)+((ball_y_loc-p1_y_loc)^2)),
+  mutate(p1_xy = paste(p1_x_loc, p1_y_loc, sep = ", "),
+         p1_dist_from_ball = sqrt(((ball_x_loc-p1_x_loc)^2)+((ball_y_loc-p1_y_loc)^2)),
          p2_dist_from_ball = sqrt(((ball_x_loc-p2_x_loc)^2)+((ball_y_loc-p2_y_loc)^2)),
          p3_dist_from_ball = sqrt(((ball_x_loc-p3_x_loc)^2)+((ball_y_loc-p3_y_loc)^2)),
          p4_dist_from_ball = sqrt(((ball_x_loc-p4_x_loc)^2)+((ball_y_loc-p4_y_loc)^2)),
@@ -55,21 +35,29 @@ shot_attempts_all <- shot_attempts_all %>%
          p8_dist_from_ball = sqrt(((ball_x_loc-p8_x_loc)^2)+((ball_y_loc-p8_y_loc)^2)),
          p9_dist_from_ball = sqrt(((ball_x_loc-p9_x_loc)^2)+((ball_y_loc-p9_y_loc)^2)),
          p10_dist_from_ball = sqrt(((ball_x_loc-p10_x_loc)^2)+((ball_y_loc-p10_y_loc)^2)),
+         result = case_when(shot_type == "3PT Field Goal" & event_type == "Made Shot" ~ 3,
+                            shot_type == "2PT Field Goal" & event_type == "Made Shot" ~ 2,
+                            event_type == "Missed Shot" ~ 0
+                            )
          )
 
-
+shot_attempts_all %>% 
+  mutate(p1_xy = paste(p1_x_loc, p1_y_loc, sep = ", "),
+         p6_xy = paste(p6_x_loc, p6_y_loc, sep = ", "),
+         hoop_xy = "5.35, 88.65",
+         def_angle = Angle(hoop_xy, p1_xy, p6_xy)
+         ) %>% 
+  select(p1_xy, p6_xy, hoop_xy)
 
 ```
 
 
+
+
+
 ```{r}
 shot_attempts_all %>% 
-  filter(game_id == "0021500154", quarter == 4, player_name == "Victor Oladipo") %>% 
-  arrange(desc(minutes_remaining), desc(seconds_remaining))
-
-
-
-# , quarter == 4, player_name == "Langston Galloway"
+  mutate(def_angle = Angle())
 ```
 
 ```{r}
