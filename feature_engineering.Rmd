@@ -1,0 +1,58 @@
+---
+title: "feature engineering"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janitor)
+library(moderndive)
+
+
+options(scipen = 999)
+
+`%not_in%` = Negate(`%in%`)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+shot_attempts_batch_1 <- read_csv("shot_attempts_batch_1.csv")
+shot_attempts_batch_2 <- read_csv("shot_attempts_batch_2.csv")
+shot_attempts_batch_3 <- read_csv("shot_attempts_batch_3.csv")
+shot_attempts_batch_4 <- read_csv("shot_attempts_batch_4.csv")
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+shot_attempts_all <- bind_rows(shot_attempts_batch_1, shot_attempts_batch_2, shot_attempts_batch_3, shot_attempts_batch_4) %>% 
+  mutate_at(vars(contains("id")), funs(as.character(.))) %>% 
+  mutate(game_clock = q_game_clock-(quarter*1000)) %>% 
+  select(game_id, quarter, game_clock, everything()) %>% 
+  distinct()
+
+```
+
+
+```{r}
+shot_attempts_all %>% 
+  mutate(dist_from_hoop = case_when(sqrt(((ifelse(x_dist_from_hoop_L < 41.65, x_dist_from_hoop_L, x_dist_from_hoop_R))^2)+(y_dist_from_hoop^2))))
+```
+
+
+```{r}
+shot_attempts_all %>% 
+  filter(game_id == "0021500154", quarter == 4, player_name == "Victor Oladipo") %>% 
+  arrange(desc(minutes_remaining), desc(seconds_remaining))
+
+
+
+# , quarter == 4, player_name == "Langston Galloway"
+```
+
+```{r}
+shot_attempts_all %>% 
+  filter(game_id == "0021500300", quarter == 4) %>% 
+  arrange(quarter, desc(minutes_remaining), desc(seconds_remaining))
+```
+
