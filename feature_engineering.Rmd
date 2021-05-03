@@ -18,30 +18,6 @@ options(scipen = 999)
 
 ```
 
-```{r message=FALSE, warning=FALSE}
-shot_attempts_all <- read_csv("data/shot_attempts_all.csv")
-```
-
-
-```{r}
-#put this chunk in extract all file!
-
-shot_attempts_all_dist <- shot_attempts_all %>% 
-  mutate(p1_dist_from_ball = sqrt(((ball_x_loc-p1_x_loc)^2)+((ball_y_loc-p1_y_loc)^2)),
-         p2_dist_from_ball = sqrt(((ball_x_loc-p2_x_loc)^2)+((ball_y_loc-p2_y_loc)^2)),
-         p3_dist_from_ball = sqrt(((ball_x_loc-p3_x_loc)^2)+((ball_y_loc-p3_y_loc)^2)),
-         p4_dist_from_ball = sqrt(((ball_x_loc-p4_x_loc)^2)+((ball_y_loc-p4_y_loc)^2)),
-         p5_dist_from_ball = sqrt(((ball_x_loc-p5_x_loc)^2)+((ball_y_loc-p5_y_loc)^2)),
-         p6_dist_from_ball = sqrt(((ball_x_loc-p6_x_loc)^2)+((ball_y_loc-p6_y_loc)^2)),
-         p7_dist_from_ball = sqrt(((ball_x_loc-p7_x_loc)^2)+((ball_y_loc-p7_y_loc)^2)),
-         p8_dist_from_ball = sqrt(((ball_x_loc-p8_x_loc)^2)+((ball_y_loc-p8_y_loc)^2)),
-         p9_dist_from_ball = sqrt(((ball_x_loc-p9_x_loc)^2)+((ball_y_loc-p9_y_loc)^2)),
-         p10_dist_from_ball = sqrt(((ball_x_loc-p10_x_loc)^2)+((ball_y_loc-p10_y_loc)^2))
-         )
-
-#write.csv(shot_attempts_all_dist, 'shot_attempts_all_dist.csv', row.names = FALSE)
-
-```
 
 
 ```{r}
@@ -81,20 +57,35 @@ shot_attempts_final <- shot_attempts_all_nearest_def %>%
 
 
 shot_attempts_final %>%
-  filter_all(any_vars(is.na(.))) 
+  filter_all(any_vars(is.na(.))) %>% 
+  select(shooter_x_loc, shooter_y_loc, shooter_id, nearest_def_dist, nearest_def_x_loc, nearest_def_y_loc, shot_team_id, p1_dist_from_ball:p10_dist_from_ball, p1_id:p10_y_loc, everything())
 ```
 
 
 ```{r}
-def_angle(25.75378, 42.35926, 92.47260, 23.24975)
+shot_attempts_final %>% 
+  filter(game_id == 21500118) %>% 
+  arrange(quarter, desc(minutes_remaining), desc(seconds_remaining))
 ```
 
 
-
-
 ```{r}
-shot_attempts_all %>% 
-  mutate(def_angle = Angle())
+shot_attempts_final %>% 
+  mutate(no_shooter_flag = case_when(shooter_id == p1_id ~ 1,
+                                     shooter_id == p2_id ~ 2,
+                                     shooter_id == p3_id ~ 3,
+                                     shooter_id == p4_id ~ 4,
+                                     shooter_id == p5_id ~ 5,
+                                     shooter_id == p6_id ~ 6,
+                                     shooter_id == p7_id ~ 7,
+                                     shooter_id == p8_id ~ 8,
+                                     shooter_id == p9_id ~ 19,
+                                     shooter_id == p10_id ~ 10,
+                                     TRUE ~ 0
+                                )
+         ) %>% 
+  filter(no_shooter_flag == 0) %>% 
+  select(shooter_id, p1_id, p2_id, p3_id, p4_id, p5_id, p6_id, p7_id, p8_id, p9_id, p10_id, everything())
 ```
 
 ```{r}
