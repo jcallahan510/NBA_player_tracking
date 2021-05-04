@@ -4,12 +4,10 @@ output: html_document
 ---
 
 ```{r message=FALSE, warning=FALSE}
+
 library(tidyverse)
 library(janitor)
 library(moderndive)
-#install.packages("LearnGeom")
-library(LearnGeom)
-#install.packages("aspace")
 library(aspace)
 
 options(scipen = 999)
@@ -18,12 +16,33 @@ options(scipen = 999)
 
 ```
 
+```{r message=FALSE, warning=FALSE}
+shot_attempts_all_nearest_def <- read_csv("data/shot_attempts_all_nearest_def.csv")
+```
 
 
 ```{r}
+# shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>% 
+#   mutate(no_shooter_flag = case_when(shooter_id == p1_id ~ 1,
+#                                      shooter_id == p2_id ~ 2,
+#                                      shooter_id == p3_id ~ 3,
+#                                      shooter_id == p4_id ~ 4,
+#                                      shooter_id == p5_id ~ 5,
+#                                      shooter_id == p6_id ~ 6,
+#                                      shooter_id == p7_id ~ 7,
+#                                      shooter_id == p8_id ~ 8,
+#                                      shooter_id == p9_id ~ 19,
+#                                      shooter_id == p10_id ~ 10,
+#                                      TRUE ~ 0
+#                                 )
+#          ) %>% 
+#   filter(no_shooter_flag != 0)
+```
 
-shot_attempts_all_nearest_def <- read_csv("data/shot_attempts_all_nearest_def.csv")
 
+
+
+```{r functions}
 def_angle <- function(x, y, x2, y2){
   nearest_def_dist <- sqrt(((x-x2)^2) + ((y-y2)^2))
   shot_dist_from_L_hoop <- sqrt(((x-5.35)^2) + ((y-25)^2))
@@ -43,7 +62,10 @@ shooter_to_hoop <- function(x, y){
   return(shooter_to_hoop)
   
 }
+```
 
+
+```{r}
 shot_attempts_final <- shot_attempts_all_nearest_def %>% 
   mutate(points = case_when(shot_type == "3PT Field Goal" & event_type == "Made Shot" ~ 3,
                             shot_type == "2PT Field Goal" & event_type == "Made Shot" ~ 2,
@@ -51,41 +73,51 @@ shot_attempts_final <- shot_attempts_all_nearest_def %>%
                             ),
          shot_type_num = ifelse(shot_type == "2PT Field Goal", 2, 3),
          shooter_to_hoop = shooter_to_hoop(shooter_x_loc, shooter_y_loc),
-         nearest_def_dist = sqrt(((shooter_x_loc-nearest_def_x_loc)^2) + ((shooter_x_loc-nearest_def_y_loc)^2)),
+         nearest_def_dist = sqrt(((shooter_x_loc-nearest_def_x_loc)^2) + ((shooter_y_loc-nearest_def_y_loc)^2)),
          def_angle = def_angle(shooter_x_loc, shooter_y_loc, nearest_def_x_loc, nearest_def_y_loc)
          ) 
 
 
-shot_attempts_final %>%
+nan_def_angle <- shot_attempts_final %>%
   filter_all(any_vars(is.na(.))) %>% 
+  select(shooter_x_loc, shooter_y_loc, shooter_id, nearest_def_dist, nearest_def_x_loc, nearest_def_y_loc, shot_team_id, p1_dist_from_ball:p10_dist_from_ball, p1_id:p10_y_loc, everything(), -1)
+
+#write.csv(nan_def_angle, 'nan_def_angle.csv', )
+
+shot_attempts_final %>% 
+  arrange(-nearest_def_dist) %>% 
   select(shooter_x_loc, shooter_y_loc, shooter_id, nearest_def_dist, nearest_def_x_loc, nearest_def_y_loc, shot_team_id, p1_dist_from_ball:p10_dist_from_ball, p1_id:p10_y_loc, everything())
+
+
+shot_attempts_final %>% 
+  mutate(ball_to_shooter = sqrt(((shooter_x_loc-ball_x_loc)^2) + ((shooter_y_loc-ball_y_loc)^2))) %>% 
+  arrange(-ball_to_shooter) %>% 
+  select(ball_to_shooter, everything()) %>% 
+  filter(ball_to_shooter > 10)
+
 ```
 
 
 ```{r}
-shot_attempts_final %>% 
-  filter(game_id == 21500118) %>% 
-  arrange(quarter, desc(minutes_remaining), desc(seconds_remaining))
-```
-
-
-```{r}
-shot_attempts_final %>% 
-  mutate(no_shooter_flag = case_when(shooter_id == p1_id ~ 1,
-                                     shooter_id == p2_id ~ 2,
-                                     shooter_id == p3_id ~ 3,
-                                     shooter_id == p4_id ~ 4,
-                                     shooter_id == p5_id ~ 5,
-                                     shooter_id == p6_id ~ 6,
-                                     shooter_id == p7_id ~ 7,
-                                     shooter_id == p8_id ~ 8,
-                                     shooter_id == p9_id ~ 19,
-                                     shooter_id == p10_id ~ 10,
+shot_attempts_final <- shot_attempts_all_nearest_def %>% 
+  mutate(case_when(shooter_id == p1_id ~ 1,
+         shooter_id == p2_id ~ 2,
+         shooter_id == p3_id ~ 3,
+         shooter_id == p4_id ~ 4,
+         shooter_id == p5_id ~ 5,
+         shooter_id == p6_id ~ 6,
+         shooter_id == p7_id ~ 7,
+         shooter_id == p8_id ~ 8,
+         shooter_id == p9_id ~ 19,
+         shooter_id == p10_id ~ 10,
                                      TRUE ~ 0
                                 )
-         ) %>% 
-  filter(no_shooter_flag == 0) %>% 
-  select(shooter_id, p1_id, p2_id, p3_id, p4_id, p5_id, p6_id, p7_id, p8_id, p9_id, p10_id, everything())
+```
+
+
+```{r}
+
+
 ```
 
 ```{r}
