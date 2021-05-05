@@ -3,39 +3,47 @@ title: "modeling"
 output: html_document
 ---
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(janitor)
 library(moderndive)
 library(rsample)
-install.packages("nnet")
+#install.packages("nnet")
 library(nnet)
 ```
 
+```{r message=FALSE}
+less_than_two <- read_csv("data/less_than_two.csv")
 
-
-```{r}
 shots_split <- initial_split(less_than_two)
 shots_train <- training(shots_split)
 shots_test <- testing(shots_split)
+
 ```
 
 
 
 ```{r}
-NBA_model <- lm(points ~ rim_jump + nearest_def_dist * def_angle + pps + shooter_to_hoop + shot_type_num + shot_zone_basic, data = shots_train)
+NBA_model <- lm(points ~ shot_type_num * efg * fga + shot_type_num + shot_zone_basic + shooter_to_hoop + rim_jump + nearest_def_dist_round * def_angle, data = shots_train)
 
 get_regression_summaries(NBA_model)
 summary(NBA_model)
 ```
 
 ```{r}
-y <- predict(NBA_model, shots_test)
+# y <- predict(NBA_model, shots_test)
+# 
+# rmse <- sqrt(sum((y - shots_test$points)^2)/length(shots_test$points))
+# rmse
+# 
+# hist(y)
 
-rmse <- sqrt(sum((y - shots_test$points)^2)/length(shots_test$points))
-rmse
+y2 <- predict(NBA_model, shots_test)
 
-hist(y)
+rmse2 <- sqrt(sum((y2 - shots_test$points)^2)/length(shots_test$points))
+rmse2
+
+hist(y2)
 
 ```
 

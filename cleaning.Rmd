@@ -19,6 +19,7 @@ options(scipen = 999)
 ```{r message=FALSE, warning=FALSE}
 shot_attempts_all <- read_csv("data/shot_attempts_all.csv")
 nba_player_ids <- read_csv("data/NBA_Player_IDs.csv")
+stats15_16 <- read_csv("data/stats15_16.csv")
 ```
 
 
@@ -157,14 +158,20 @@ less_than_two <- less_than_two %>%
 
 
 # less_than_two %>%
-#   filter_all(any_vars(is.na(.))) 
-  
-write.csv(less_than_two, 'less_than_two.csv', row.names = FALSE)
+#   filter_all(any_vars(is.na(.)))
 ```
 
 
+```{r}
+stats15_16 <- stats15_16 %>% 
+  clean_names() %>% 
+  select(-rk, fgp = fg_percent, tpm = x3p, tpa = x3pa, tpp = x3p_percent, tpfgm = x2p, tpfga = x2pa, tpfgp = x2p_percent, efg = e_fg_percent)
 
-
+less_than_two <- less_than_two %>% 
+  left_join(stats15_16, by = c('player_name' = 'player'))
+  
+write.csv(less_than_two, 'data/less_than_two.csv', row.names = FALSE)
+```
 
 
 
