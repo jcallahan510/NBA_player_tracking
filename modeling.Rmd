@@ -1,0 +1,67 @@
+---
+title: "modeling"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(moderndive)
+library(rsample)
+install.packages("nnet")
+library(nnet)
+```
+
+
+
+```{r}
+shots_split <- initial_split(less_than_two)
+shots_train <- training(shots_split)
+shots_test <- testing(shots_split)
+```
+
+
+
+```{r}
+NBA_model <- lm(points ~ rim_jump + nearest_def_dist * def_angle + pps + shooter_to_hoop + shot_type_num + shot_zone_basic, data = shots_train)
+
+get_regression_summaries(NBA_model)
+summary(NBA_model)
+```
+
+```{r}
+y <- predict(NBA_model, shots_test)
+
+rmse <- sqrt(sum((y - shots_test$points)^2)/length(shots_test$points))
+rmse
+
+hist(y)
+
+```
+
+
+```{r}
+
+
+NBA_model_class <- ?glm(made_missed ~ rim_jump + nearest_def_dist * def_angle + pps + shooter_to_hoop + shot_type_num + shot_zone_basic, data = shots_train)
+
+get_regression_summaries(NBA_model_class)
+summary.glm(NBA_model_class)
+```
+
+```{r}
+y_class <- predict(NBA_model_class, shots_test)
+
+rmse_class <- sqrt(sum((y_class - shots_test$points_class)^2)/length(shots_test$points_class))
+rmse_class
+
+hist(y_class)
+
+
+
+
+```
+
+
+
+
