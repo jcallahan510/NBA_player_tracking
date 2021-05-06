@@ -8,67 +8,76 @@ library(tidyverse)
 library(janitor)
 library(moderndive)
 library(rsample)
-#install.packages("nnet")
-library(nnet)
+library(randomForest)
+require(caTools)
 ```
 
 ```{r message=FALSE}
 less_than_two <- read_csv("data/less_than_two.csv")
+```
 
+
+```{r}
 shots_split <- initial_split(less_than_two)
 shots_train <- training(shots_split)
 shots_test <- testing(shots_split)
 
+dim(shots_train)
+dim(shots_test)
+
+
+
+features_only <- less_than_two %>% 
+  select(points, shot_type_num, efg, fga, shot_type_num, shot_zone_basic, shooter_to_hoop, rim_jump, nearest_def_dist_round, def_angle)
+
+sapply(features_only, class)
+
+features_only <- features_only %>% 
+  mutate(shot_zone_basic = as.factor(shot_zone_basic),
+         rim_jump = as.factor(rim_jump)
+         )
+
+features_only %>% 
+  filter_all(any_vars(is.na(.)))
+
+
+features_split <- initial_split(features_only)
+features_train <- training(features_split)
+features_test <- testing(features_split)
+
 ```
 
 
-
+# baseline linear regression model
 ```{r}
-NBA_model <- lm(points ~ shot_type_num * efg * fga + shot_type_num + shot_zone_basic + shooter_to_hoop + rim_jump + nearest_def_dist_round * def_angle, data = shots_train)
+baseline_model <- lm(points ~ shot_type_num * efg * fga + shot_type_num + shot_zone_basic + shooter_to_hoop + rim_jump + nearest_def_dist_round * def_angle, data = shots_train)
 
-get_regression_summaries(NBA_model)
+get_regression_summaries(baseline_model)
 summary(NBA_model)
 ```
 
 ```{r}
-# y <- predict(NBA_model, shots_test)
-# 
-# rmse <- sqrt(sum((y - shots_test$points)^2)/length(shots_test$points))
-# rmse
-# 
-# hist(y)
+y <- predict(baseline_model, shots_test)
 
-y2 <- predict(NBA_model, shots_test)
+rmse <- sqrt(sum((y2 - shots_test$points)^2)/length(shots_test$points))
+rmse
 
-rmse2 <- sqrt(sum((y2 - shots_test$points)^2)/length(shots_test$points))
-rmse2
-
-hist(y2)
+hist(y)
 
 ```
 
 
+
+#random forest
 ```{r}
+rf_model <- randomForest(points ~ ., data = features_train)
 
-
-NBA_model_class <- ?glm(made_missed ~ rim_jump + nearest_def_dist * def_angle + pps + shooter_to_hoop + shot_type_num + shot_zone_basic, data = shots_train)
-
-get_regression_summaries(NBA_model_class)
-summary.glm(NBA_model_class)
+sapply(features_train, class)
 ```
 
-```{r}
-y_class <- predict(NBA_model_class, shots_test)
-
-rmse_class <- sqrt(sum((y_class - shots_test$points_class)^2)/length(shots_test$points_class))
-rmse_class
-
-hist(y_class)
 
 
 
-
-```
 
 
 
