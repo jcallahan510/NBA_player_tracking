@@ -3,21 +3,34 @@ title: "modeling"
 output: html_document
 ---
 
-```{r message=FALSE, warning=FALSE}
+```{r load libraries, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(janitor)
 library(moderndive)
 library(rsample)
 library(randomForest)
 require(caTools)
+library(caret)
+
+options(scipen = 999)
+
+`%not_in%` = Negate(`%in%`)
 ```
 
-```{r message=FALSE}
+```{r load data, message=FALSE}
 less_than_two <- read_csv("data/less_than_two.csv")
 ```
 
 
+
+
+
+
+
+
+
 ```{r}
+
 shots_split <- initial_split(less_than_two)
 shots_train <- training(shots_split)
 shots_test <- testing(shots_split)
@@ -53,13 +66,13 @@ features_test <- testing(features_split)
 baseline_model <- lm(points ~ shot_type_num * efg * fga + shot_type_num + shot_zone_basic + shooter_to_hoop + rim_jump + nearest_def_dist_round * def_angle, data = shots_train)
 
 get_regression_summaries(baseline_model)
-summary(NBA_model)
+#summary(NBA_model)
 ```
 
 ```{r}
 y <- predict(baseline_model, shots_test)
 
-rmse <- sqrt(sum((y2 - shots_test$points)^2)/length(shots_test$points))
+rmse <- sqrt(sum((y - shots_test$points)^2)/length(shots_test$points))
 rmse
 
 hist(y)
@@ -70,15 +83,95 @@ hist(y)
 
 #random forest
 ```{r}
-rf_model <- randomForest(points ~ ., data = features_train)
+#regression
 
-sapply(features_train, class)
+rf_model <- randomForest(points ~ ., data = features_train, do.trace = TRUE)
+
+y_rf <- predict(rf_model, features_test)
+
+rmse_rf <- sqrt(sum((y_rf - features_test$points)^2)/length(features_test$points))
+rmse_rf
+
+```
+
+```{r}
+#factor
+
+factor_points <- features_only %>% 
+  mutate(points = as.factor(points))
+
+factor_points_split <- initial_split(factor_points)
+factor_points_train <- training(factor_points_split)
+factor_points_test <- testing(factor_points_split)
+
+factor_points_model <- randomForest(points ~ ., data = factor_points_train, do.trace = TRUE)
+
+y_factor <- predict(factor_points_model, features_test)
+
+
 ```
 
 
 
 
+#stratisfy sample
+```{r}
+shots_split_strat <- initial_split(less_than_two, prop = 3/5)
+shots_train_strat <- training(shots_split_strat)
+shots_test_strat <- testing(shots_split_strat)
+
+nrow(shots_train_strat)/nrow(less_than_two)
+nrow(shots_test_strat)/nrow(less_than_two)
+```
 
 
+```{r}
+# 9428 rows of missed 2PT shots. Make this 1/4 of modeling df
+missed_twos <- shots_train_strat %>% 
+  filter(shot_type == "2PT Field Goal", made_missed == 0)
+
+#made 2PT
+made_twos <- shots_train_strat %>% 
+  filter(shot_type == "2PT Field Goal", made_missed == 1)
+
+made_twos_samp <- made_twos[sample(nrow(made_twos), 9428, replace = TRUE),]
+
+#missed 3PT
+missed_threes <- shots_train_strat %>% 
+  filter(shot_type == "3PT Field Goal", made_missed == 0)
+
+missed_threes_samp <- missed_threes[sample(nrow(missed_threes), 9428, replace = TRUE),]
+
+#made 3PT
+made_threes <- shots_train_strat %>% 
+  filter(shot_type == "3PT Field Goal", made_missed == 1)
+
+made_threes_samp <- made_threes[sample(nrow(made_threes), 9428, replace = TRUE),]
+
+strat_sample <- bind_rows(missed_twos, made_twos_samp, made_threes_samp, missed_threes_samp)
+
+train_strat_features <- strat_sample %>% 
+  select(points, shot_type_num, efg, fga, shot_type_num, shot_zone_basic, shooter_to_hoop, rim_jump, nearest_def_dist_round, def_angle) %>% 
+  mutate(points = as.factor(points),
+         shot_zone_basic = as.factor(shot_zone_basic),
+         rim_jump = as.factor(rim_jump)
+  )
+
+test_strat_features <- shots_test_strat %>% 
+  select(points, shot_type_num, efg, fga, shot_type_num, shot_zone_basic, shooter_to_hoop, rim_jump, nearest_def_dist_round, def_angle) %>% 
+  mutate(points = as.factor(points),
+         shot_zone_basic = as.factor(shot_zone_basic),
+         rim_jump = as.factor(rim_jump)
+  )
+```
+
+
+```{r}
+strat_model <- randomForest(points ~ ., data = train_strat_features, do.trace = TRUE)
+
+y_strat <- predict(strat_model, test_strat_features)
+
+confusionMatrix(y_strat, test_strat_features$points)
+```
 
 

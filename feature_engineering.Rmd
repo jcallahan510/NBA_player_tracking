@@ -3,11 +3,11 @@ title: "feature engineering"
 output: html_document
 ---
 
-```{r message=FALSE, warning=FALSE}
+#load libraries
+```{r load libraries, message=FALSE, warning=FALSE}
 
 library(tidyverse)
 library(janitor)
-library(moderndive)
 library(aspace)
 
 options(scipen = 999)
@@ -16,32 +16,13 @@ options(scipen = 999)
 
 ```
 
-```{r message=FALSE, warning=FALSE}
+#load data
+```{r load data, message=FALSE}
 shot_attempts_all_nearest_def <- read_csv("data/shot_attempts_all_nearest_def.csv")
 ```
 
 
-```{r}
-# shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>% 
-#   mutate(no_shooter_flag = case_when(shooter_id == p1_id ~ 1,
-#                                      shooter_id == p2_id ~ 2,
-#                                      shooter_id == p3_id ~ 3,
-#                                      shooter_id == p4_id ~ 4,
-#                                      shooter_id == p5_id ~ 5,
-#                                      shooter_id == p6_id ~ 6,
-#                                      shooter_id == p7_id ~ 7,
-#                                      shooter_id == p8_id ~ 8,
-#                                      shooter_id == p9_id ~ 19,
-#                                      shooter_id == p10_id ~ 10,
-#                                      TRUE ~ 0
-#                                 )
-#          ) %>% 
-#   filter(no_shooter_flag != 0)
-```
-
-
-
-
+#create functions
 ```{r functions}
 def_angle <- function(x, y, x2, y2){
   nearest_def_dist <- sqrt(((x-x2)^2) + ((y-y2)^2))
@@ -60,89 +41,98 @@ shooter_to_hoop <- function(x, y){
   shot_dist_from_R_hoop <- sqrt(((x-88.65)^2) + ((y-25)^2))
   shooter_to_hoop <- ifelse(shot_dist_from_L_hoop < shot_dist_from_R_hoop, shot_dist_from_L_hoop, shot_dist_from_R_hoop)
   return(shooter_to_hoop)
-  
-}
+  }
 ```
 
 
-```{r}
-shot_attempts_final <- shot_attempts_all_nearest_def %>% 
+
+```{r new}
+shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>% 
   mutate(points = case_when(shot_type == "3PT Field Goal" & event_type == "Made Shot" ~ 3,
                             shot_type == "2PT Field Goal" & event_type == "Made Shot" ~ 2,
                             event_type == "Missed Shot" ~ 0
                             ),
+         points_class = as.character(points),
          shot_type_num = ifelse(shot_type == "2PT Field Goal", 2, 3),
+         shooter_id = as.character(shooter_id),
+         made_missed = ifelse(points == 2 | points == 3, 1, 0),
          shooter_to_hoop = shooter_to_hoop(shooter_x_loc, shooter_y_loc),
          nearest_def_dist = sqrt(((shooter_x_loc-nearest_def_x_loc)^2) + ((shooter_y_loc-nearest_def_y_loc)^2)),
-         def_angle = def_angle(shooter_x_loc, shooter_y_loc, nearest_def_x_loc, nearest_def_y_loc)
-         ) 
+         def_angle = def_angle(shooter_x_loc, shooter_y_loc, nearest_def_x_loc, nearest_def_y_loc),
+         def_angle = ifelse(is.na(def_angle), 91, def_angle),
+         rim_jump = case_when(grepl("Dunk", less_than_two$action_type, ignore.case = TRUE) ~ "rim",
+                              grepl("Lay", less_than_two$action_type, ignore.case = TRUE) ~ "rim",
+                              TRUE ~ "jump"
+                              ),
+         nearest_def_dist_round = case_when(nearest_def_dist <= .25 ~ 0,
+                                            nearest_def_dist > .25 & nearest_def_dist <= .75 ~ .5,
+                                            nearest_def_dist > .75 & nearest_def_dist <= 1.25 ~ 1,
+                                            nearest_def_dist > 1.25 & nearest_def_dist <= 1.75 ~ 1.5,
+                                            nearest_def_dist > 1.75 & nearest_def_dist <= 2.25 ~ 2,
+                                            nearest_def_dist > 2.25 & nearest_def_dist <= 2.75 ~ 2.5,
+                                            nearest_def_dist > 2.75 & nearest_def_dist <= 3.25 ~ 3,
+                                            nearest_def_dist > 3.25 & nearest_def_dist <= 3.75 ~ 3.5,
+                                            nearest_def_dist > 3.75 & nearest_def_dist <= 4.25 ~ 4,
+                                            nearest_def_dist > 4.25 & nearest_def_dist <= 4.75 ~ 4.5,
+                                            nearest_def_dist > 4.75 & nearest_def_dist <= 5.25 ~ 5,
+                                            nearest_def_dist > 5.25 & nearest_def_dist <= 5.75 ~ 5.5,
+                                            nearest_def_dist > 5.75 & nearest_def_dist <= 6.25 ~ 6,
+                                            nearest_def_dist > 6.25 & nearest_def_dist <= 6.75 ~ 6.5,
+                                            nearest_def_dist > 6.75 & nearest_def_dist <= 7.25 ~ 7,
+                                            nearest_def_dist > 7.25 & nearest_def_dist <= 7.75 ~ 7.5,
+                                            nearest_def_dist > 7.75 & nearest_def_dist <= 8.25 ~ 8,
+                                            nearest_def_dist > 8.25 ~ 9,
+                                            )
+         ) %>% 
+  group_by(shooter_id) %>% 
+  mutate(n = n(), pps = sum(points)/n) %>% 
+  ungroup()
 
 
-nan_def_angle <- shot_attempts_final %>%
-  filter_all(any_vars(is.na(.))) %>% 
-  select(shooter_x_loc, shooter_y_loc, shooter_id, nearest_def_dist, nearest_def_x_loc, nearest_def_y_loc, shot_team_id, p1_dist_from_ball:p10_dist_from_ball, p1_id:p10_y_loc, everything(), -1)
-
-#write.csv(nan_def_angle, 'nan_def_angle.csv', )
-
-shot_attempts_final %>% 
-  arrange(-nearest_def_dist) %>% 
-  select(shooter_x_loc, shooter_y_loc, shooter_id, nearest_def_dist, nearest_def_x_loc, nearest_def_y_loc, shot_team_id, p1_dist_from_ball:p10_dist_from_ball, p1_id:p10_y_loc, everything())
+```
 
 
-shot_attempts_final %>% 
+```{r}
+stats15_16 <- stats15_16 %>% 
+  clean_names() %>% 
+  select(-rk, fgp = fg_percent, tpm = x3p, tpa = x3pa, tpp = x3p_percent, tpfgm = x2p, tpfga = x2pa, tpfgp = x2p_percent, efg = e_fg_percent)
+
+
+```
+
+
+
+
+```{r}
+less_than_two <- less_than_two %>% 
+  left_join(stats15_16, by = c('player_name' = 'player'))
+```
+
+
+
+
+```{r}
+less_than_two <- shot_attempts_all_nearest_def %>% 
   mutate(ball_to_shooter = sqrt(((shooter_x_loc-ball_x_loc)^2) + ((shooter_y_loc-ball_y_loc)^2))) %>% 
   arrange(-ball_to_shooter) %>% 
-  select(ball_to_shooter, everything()) %>% 
-  filter(ball_to_shooter > 10)
+  select(ball_to_shooter, shooter_id, shooter_x_loc, shooter_y_loc, shot_team_id, ball_x_loc, ball_y_loc, everything()) %>% 
+  filter(ball_to_shooter < 2)
 
 ```
-
-
-```{r}
-shot_attempts_final <- shot_attempts_all_nearest_def %>% 
-  mutate(case_when(shooter_id == p1_id ~ 1,
-         shooter_id == p2_id ~ 2,
-         shooter_id == p3_id ~ 3,
-         shooter_id == p4_id ~ 4,
-         shooter_id == p5_id ~ 5,
-         shooter_id == p6_id ~ 6,
-         shooter_id == p7_id ~ 7,
-         shooter_id == p8_id ~ 8,
-         shooter_id == p9_id ~ 19,
-         shooter_id == p10_id ~ 10,
-                                     TRUE ~ 0
-                                )
-```
-
-
-```{r}
-
-
-```
-
-```{r}
-shot_attempts_all %>% 
-  filter(game_id == "0021500336", player_name == "Jae Crowder", quarter == 6)
-```
-
-
-
-
 
 
 
 
 
 ```{r}
-
-# shoot <- c(0, 2)
-# basket <- c(0, 0)
-# def <- c(2, 0)
-# 
-# a <- sqrt(((basket[1]-def[1])^2)+((basket[2]-def[2])^2)) #defender to hoop
-# b <- sqrt(((shoot[1]-def[1])^2)+((shoot[2]-def[2])^2)) #neaest_def_distance
-# c <- sqrt(((shoot[1]-basket[1])^2)+((shoot[2]-basket[2])^2)) #shooter to hoop
-# 
-# acos_d(((b^2)+(c^2)-(a^2))/(2*b*c))
+write.csv(less_than_two, 'data/less_than_two.csv', row.names = FALSE)
 ```
+
+
+
+
+
+
+
+
 
