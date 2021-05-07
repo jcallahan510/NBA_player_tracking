@@ -70,10 +70,10 @@ shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>%
                             shot_type == "2PT Field Goal" & event_type == "Made Shot" ~ 2,
                             event_type == "Missed Shot" ~ 0
                             ),
-         points_class = as.character(points),
+         points_factor = as.factor(points),
          shot_type_num = ifelse(shot_type == "2PT Field Goal", 2, 3),
          shooter_id = as.character(shooter_id),
-         made_missed = ifelse(points == 2 | points == 3, 1, 0),
+         made_missed = as.factor(ifelse(points == 2 | points == 3, 1, 0)),
          nearest_def_dist = sqrt(((shooter_x_loc-nearest_def_x_loc)^2) + ((shooter_y_loc-nearest_def_y_loc)^2)),
          def_angle = def_angle(shooter_x_loc, shooter_y_loc, nearest_def_x_loc, nearest_def_y_loc),
          def_angle = ifelse(is.na(def_angle), 91, def_angle),
