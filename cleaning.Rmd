@@ -18,7 +18,6 @@ options(scipen = 999)
 
 ```{r message=FALSE, warning=FALSE}
 shot_attempts_all <- read_csv("data/shot_attempts_all.csv")
-nba_player_ids <- read_csv("data/NBA_Player_IDs.csv")
 stats15_16 <- read_csv("data/stats15_16.csv")
 ```
 
@@ -62,8 +61,7 @@ shot_attempts_all <- shot_attempts_all %>%
                                     p10_x_loc == 0 ~ 0,
                                     p10_y_loc == 0 ~ 0,
                                     TRUE ~ 1
-                                    ),
-         
+                                    )
          ) %>% 
   filter(no_shooter_flag != 0, zero_cord_flag > 0, shot_zone_basic != "Backcourt") %>% 
   mutate_at(vars(contains("id")), funs(as.character(.))) %>% 
@@ -95,13 +93,7 @@ write.csv(shot_attempts_all_dist, 'data/shot_attempts_all_dist.csv', row.names =
 
 
 
-#import dataset from python script
-
-```{r message=FALSE}
-shot_attempts_all_nearest_def <- read_csv("data/shot_attempts_all_nearest_def.csv")
-```
-
-
+#import saved 'shot_attempts_all_dist.csv' into find_closest_2 in python and run there
 
 
 

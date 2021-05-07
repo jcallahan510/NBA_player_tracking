@@ -45,8 +45,26 @@ shooter_to_hoop <- function(x, y){
 ```
 
 
+```{r more cleaning}
 
-```{r new}
+shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>%
+  mutate(shooter_to_hoop = shooter_to_hoop(shooter_x_loc, shooter_y_loc),
+         wrong_distance_flag = case_when(shot_zone_basic == "Above the Break 3" & shooter_to_hoop < 22 ~ 1,
+                                         shot_zone_basic == "In The Paint (Non-RA)" & shooter_to_hoop < 2 ~ 1,
+                                         shot_zone_basic == "In The Paint (Non-RA)" & shooter_to_hoop > 17 ~ 1,
+                                         shot_zone_basic == "Left Corner 3" & shooter_to_hoop < 20.9 ~ 1,
+                                         shot_zone_basic == "Right Corner 3" & shooter_to_hoop < 20.9 ~ 1,
+                                         shot_zone_basic == "Mid-Range" & shooter_to_hoop < 2 ~ 1,
+                                         shot_zone_basic == "Mid-Range" & shooter_to_hoop > 25.5 ~ 1,
+                                         shot_zone_basic == "Restricted Area" & shooter_to_hoop > 6 ~ 1,
+                                         TRUE ~ 0)
+         ) %>% 
+  filter(wrong_distance_flag == 0)
+
+```
+
+
+```{r create features}
 shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>% 
   mutate(points = case_when(shot_type == "3PT Field Goal" & event_type == "Made Shot" ~ 3,
                             shot_type == "2PT Field Goal" & event_type == "Made Shot" ~ 2,
@@ -56,12 +74,11 @@ shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>%
          shot_type_num = ifelse(shot_type == "2PT Field Goal", 2, 3),
          shooter_id = as.character(shooter_id),
          made_missed = ifelse(points == 2 | points == 3, 1, 0),
-         shooter_to_hoop = shooter_to_hoop(shooter_x_loc, shooter_y_loc),
          nearest_def_dist = sqrt(((shooter_x_loc-nearest_def_x_loc)^2) + ((shooter_y_loc-nearest_def_y_loc)^2)),
          def_angle = def_angle(shooter_x_loc, shooter_y_loc, nearest_def_x_loc, nearest_def_y_loc),
          def_angle = ifelse(is.na(def_angle), 91, def_angle),
-         rim_jump = case_when(grepl("Dunk", less_than_two$action_type, ignore.case = TRUE) ~ "rim",
-                              grepl("Lay", less_than_two$action_type, ignore.case = TRUE) ~ "rim",
+         rim_jump = case_when(grepl("Dunk", shot_attempts_all_nearest_def$action_type, ignore.case = TRUE) ~ "rim",
+                              grepl("Lay", shot_attempts_all_nearest_def$action_type, ignore.case = TRUE) ~ "rim",
                               TRUE ~ "jump"
                               ),
          nearest_def_dist_round = case_when(nearest_def_dist <= .25 ~ 0,
@@ -101,14 +118,10 @@ stats15_16 <- stats15_16 %>%
 ```
 
 
-
-
 ```{r}
-less_than_two <- less_than_two %>% 
+shot_attempts_all_nearest_def <- shot_attempts_all_nearest_def %>% 
   left_join(stats15_16, by = c('player_name' = 'player'))
 ```
-
-
 
 
 ```{r}
@@ -119,9 +132,6 @@ less_than_two <- shot_attempts_all_nearest_def %>%
   filter(ball_to_shooter < 2)
 
 ```
-
-
-
 
 
 ```{r}
