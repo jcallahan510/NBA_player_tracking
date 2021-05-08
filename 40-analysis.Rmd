@@ -7,13 +7,18 @@ output: html_document
 library(tidyverse)
 library(janitor)
 library(sm)
+library(kableExtra)
+
 
 rf_pred_test <- read_csv("rf_pred_test.csv")
+stats16_17 <- read_csv("data/stats16_17.csv") %>% 
+  clean_names()
 ```
 
 
 
 ```{r}
+#group to player level and create aggregate eFG% features
 gbm_pred_test_grouped_2 <- gbm_pred_test_2 %>% 
   group_by(player_name) %>% 
   summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2) %>% 
@@ -21,7 +26,7 @@ gbm_pred_test_grouped_2 <- gbm_pred_test_2 %>%
 ```
 
 ```{r}
-
+#histogram showing distribution of predictions
 
 png(file = "pred_distribution.png")
 hist(gbm_predictions_2,
@@ -38,7 +43,7 @@ dev.off()
 
 ```{r}
 filter_50 <- gbm_pred_test_grouped_2 %>% 
-  mutate(difference = sample_efg - pred_efg) %>% 
+  mutate(difference = pred_efg - sample_efg) %>% 
   filter(n >= 50) %>% 
   arrange(difference)
 ```
@@ -154,7 +159,25 @@ ggsave('volume.png', height = 7, width = 10.5)
 
 
 
+```{r}
+filter_100 <- gbm_pred_test_grouped_2 %>% 
+  mutate(difference = pred_efg - sample_efg) %>% 
+  filter(n >= 100) %>% 
+  arrange(difference)
+```
 
+```{r}
+filter_100 %>% 
+  left_join(stats16_17, by = c('player_name' = 'player')) %>% 
+  select(player_name, n, sample_efg, pred_efg, difference, x1617_efg = e_fg_percent) %>% 
+  filter(!is.na(x1617_efg)) %>% 
+  mutate(increase_pred = ifelse(difference < 0, "decrease",  "increase"), increase_1617 = ifelse(sample_efg < x1617_efg, "increase", "decrease"), sample_efg = round(sample_efg, 3), pred_efg = round(pred_efg, 3), difference = round(difference, 3)) %>% 
+  rename(Player = player_name, FGA = n, 'Sample eFG%' = sample_efg, "Pred. eFG%" = pred_efg, Diff. = difference, '16-17 eFG%' = x1617_efg, Predicted = increase_pred, Observed = increase_1617) %>% 
+  arrange(-Diff.) %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling(position = "center", full_width = TRUE)
+```
 
 
 
