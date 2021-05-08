@@ -1,0 +1,104 @@
+---
+title: "cleaning"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(janitor)
+library(moderndive)
+library(aspace)
+
+options(scipen = 999)
+
+`%not_in%` = Negate(`%in%`)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+shot_attempts_all <- read_csv("data/shot_attempts_all.csv")
+stats15_16 <- read_csv("data/stats15_16.csv")
+```
+
+
+```{r}
+#remove rows where shooter is not on court
+#remove rows where any coordinate = 0.00000
+shot_attempts_all <- shot_attempts_all %>% 
+  mutate_at(vars(contains("id")), funs(as.character(.))) %>% 
+  mutate(game_clock = q_game_clock-(quarter*1000),
+        no_shooter_flag = case_when(shooter_id == p1_id ~ 1,
+                                    shooter_id == p2_id ~ 2,
+                                    shooter_id == p3_id ~ 3,
+                                    shooter_id == p4_id ~ 4,
+                                    shooter_id == p5_id ~ 5,
+                                    shooter_id == p6_id ~ 6,
+                                    shooter_id == p7_id ~ 7,
+                                    shooter_id == p8_id ~ 8,
+                                    shooter_id == p9_id ~ 19,
+                                    shooter_id == p10_id ~ 10,
+                                    TRUE ~ 0
+                                    ),
+         zero_cord_flag = case_when(ball_x_loc == 0 ~ 0,
+                                    ball_y_loc == 0 ~ 0,
+                                    p1_x_loc == 0 ~ 0,
+                                    p1_y_loc == 0 ~ 0,
+                                    p2_x_loc == 0 ~ 0,
+                                    p2_y_loc == 0 ~ 0,
+                                    p3_x_loc == 0 ~ 0,
+                                    p3_y_loc == 0 ~ 0,
+                                    p4_x_loc == 0 ~ 0,
+                                    p4_y_loc == 0 ~ 0,
+                                    p5_x_loc == 0 ~ 0,
+                                    p5_y_loc == 0 ~ 0,
+                                    p6_x_loc == 0 ~ 0,
+                                    p7_y_loc == 0 ~ 0,
+                                    p8_x_loc == 0 ~ 0,
+                                    p8_y_loc == 0 ~ 0,
+                                    p9_x_loc == 0 ~ 0,
+                                    p9_y_loc == 0 ~ 0,
+                                    p10_x_loc == 0 ~ 0,
+                                    p10_y_loc == 0 ~ 0,
+                                    TRUE ~ 1
+                                    )
+         ) %>% 
+  filter(no_shooter_flag != 0, zero_cord_flag > 0, shot_zone_basic != "Backcourt") %>% 
+  mutate_at(vars(contains("id")), funs(as.character(.))) %>% 
+  mutate(game_clock = q_game_clock-(quarter*1000)) %>% 
+  select(game_id, quarter, game_clock, everything(), -c(no_shooter_flag, zero_cord_flag, shot_attempted_flag, grid_type))
+
+```
+
+
+```{r distances}
+
+#compute each player's distance from the ball
+shot_attempts_all_dist <- shot_attempts_all %>% 
+  mutate(p1_dist_from_ball = sqrt(((ball_x_loc-p1_x_loc)^2)+((ball_y_loc-p1_y_loc)^2)),
+         p2_dist_from_ball = sqrt(((ball_x_loc-p2_x_loc)^2)+((ball_y_loc-p2_y_loc)^2)),
+         p3_dist_from_ball = sqrt(((ball_x_loc-p3_x_loc)^2)+((ball_y_loc-p3_y_loc)^2)),
+         p4_dist_from_ball = sqrt(((ball_x_loc-p4_x_loc)^2)+((ball_y_loc-p4_y_loc)^2)),
+         p5_dist_from_ball = sqrt(((ball_x_loc-p5_x_loc)^2)+((ball_y_loc-p5_y_loc)^2)),
+         p6_dist_from_ball = sqrt(((ball_x_loc-p6_x_loc)^2)+((ball_y_loc-p6_y_loc)^2)),
+         p7_dist_from_ball = sqrt(((ball_x_loc-p7_x_loc)^2)+((ball_y_loc-p7_y_loc)^2)),
+         p8_dist_from_ball = sqrt(((ball_x_loc-p8_x_loc)^2)+((ball_y_loc-p8_y_loc)^2)),
+         p9_dist_from_ball = sqrt(((ball_x_loc-p9_x_loc)^2)+((ball_y_loc-p9_y_loc)^2)),
+         p10_dist_from_ball = sqrt(((ball_x_loc-p10_x_loc)^2)+((ball_y_loc-p10_y_loc)^2))
+         )
+
+write.csv(shot_attempts_all_dist, 'data/shot_attempts_all_dist.csv', row.names = FALSE)
+
+```
+
+
+
+#import saved 'shot_attempts_all_dist.csv' into find_closest_2 in python and run there
+
+
+
+
+
+
+
+

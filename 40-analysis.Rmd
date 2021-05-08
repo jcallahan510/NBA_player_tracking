@@ -1,0 +1,161 @@
+---
+title: "analysis"
+output: html_document
+---
+
+```{r message=FALSE}
+library(tidyverse)
+library(janitor)
+library(sm)
+
+rf_pred_test <- read_csv("rf_pred_test.csv")
+```
+
+
+
+```{r}
+gbm_pred_test_grouped_2 <- gbm_pred_test_2 %>% 
+  group_by(player_name) %>% 
+  summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2) %>% 
+  arrange(-n)
+```
+
+```{r}
+
+
+png(file = "pred_distribution.png")
+hist(gbm_predictions_2,
+     main = "Distribution of Predictions",
+     xlab = "Predicted Shot Values"
+     )
+dev.off()
+
+
+```
+
+
+
+
+```{r}
+filter_50 <- gbm_pred_test_grouped_2 %>% 
+  mutate(difference = sample_efg - pred_efg) %>% 
+  filter(n >= 50) %>% 
+  arrange(difference)
+```
+
+```{r}
+ggplot() +
+  geom_density(aes(x = sample_efg), colour = "red", data = filter_50) + 
+  geom_density(aes(x = pred_efg), colour = "blue", data = filter_50) +
+  theme_classic() +
+  theme(axis.ticks.y=element_blank(),
+        axis.text.y=element_blank(),
+        ) +
+  labs(y = "Density", x = "Red: Observed eFG% - Blue: Predicted eFG%") +
+  ggtitle("Observed vs. Predicted eFG%") +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+ggsave("observed_vs_pred.png")
+
+```
+
+
+```{r}
+gbm_pred_test_grouped_2 %>% 
+  mutate(difference = sample_efg - pred_efg) %>% 
+  filter(n > 50) %>% 
+  arrange(difference)
+```
+
+
+```{r}
+gbm_pred_test_2 %>% 
+  summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2)
+```
+
+
+
+```{r}
+gbm_pred_test_2 %>% 
+  filter(gbm_pred >= 1)
+
+
+tabyl(gbm_pred_test_2$shot_zone_basic)
+```
+
+
+
+
+
+
+
+
+```{r}
+gbm_summary <- gbm_summary %>% 
+  mutate(Feature = case_when(var == "shot_zone_basic" ~ "Shot Location",
+                         var == "nearest_def_dist_round" ~ "Distance from Nearest Defender",
+                         var == "shooter_to_hoop" ~ "Shot Distance",
+                         var == "efg" ~ "Shooter eFG% 2014-15",
+                         var == "def_angle" ~ "Angle of Defender to Shooter",
+                         var == "rim_jump" ~ "Jump Shot or Play at Rim",
+                         var == "fga" ~ "Shooter Total FGA 2014-15",
+                         var == "shot_type_num" ~ "2pt or 3pt FGA",
+                         ),
+         'Relative Influence' = round(rel.inf, 2)
+  ) %>% 
+  select(Feature, 'Relative Influence')
+
+```
+
+
+```{r}
+ggplot(gbm_summary, aes(x = reorder(Feature, `Relative Influence`), y = `Relative Influence`)) +
+  geom_bar(stat = "identity", fill = 'lightseagreen', colour = "black") +
+  xlab("Feature") +
+  coord_flip() +
+  theme_classic()
+  
+
+ggsave('features.png', height = 7, width = 10.5)
+```
+
+
+
+
+
+
+
+```{r}
+gbm_pred_test_grouped_2 <- gbm_pred_test_grouped_2 %>% 
+  mutate(difference = sample_efg - pred_efg)
+
+sd(gbm_pred_test_grouped_2$sample_efg)
+
+
+gbm_pred_test_grouped_2 %>% 
+  filter(n > 99) %>% 
+  arrange(difference)
+  
+```
+
+
+```{r}
+ggplot(gbm_pred_test_grouped_2, aes(x = gbm_pred_test_grouped_2$n, y = gbm_pred_test_grouped_2$difference)) +
+  geom_point(size = 3, alpha = .75, col = "lightseagreen") +
+  geom_smooth(col = "black", method = lm, se = FALSE) +
+  theme_classic() +
+  labs(x = "Shot Volume", y = "Difference in Predicted vs. Observed eFG%") +
+  ggtitle("Difference in Observed vs. Predicted eFG% by Shot Volume") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave('volume.png', height = 7, width = 10.5)
+  
+```
+
+
+
+
+
+
+
+

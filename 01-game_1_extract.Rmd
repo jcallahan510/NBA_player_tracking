@@ -1,0 +1,426 @@
+---
+title: "game_1_extract"
+output: html_document
+---
+
+
+# import libraries and data
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(janitor)
+library(moderndive)
+
+options(scipen = 999)
+
+`%not_in%` = Negate(`%in%`)
+```
+
+```{r warning=FALSE, message=FALSE}
+movement <- read_csv("data/0021500504.csv")
+#events <- read_csv("data/0021500504_e.csv")
+shots <- read_csv("data/shots.csv")
+```
+
+
+# data cleaning
+```{r cleaning, warning=FALSE, message=FALSE}
+#remove event_id (which is not always correct) and remove duplicate rows from movement df
+movement <- movement %>% 
+  select(-event_id) %>% 
+  distinct()
+
+#convert game_id to char and clean several shot distances in shots df
+shots <- clean_names(shots)
+shots <- shots %>% 
+  mutate(game_id = as.character(game_id),
+         game_id = paste0("00", game_id),
+         shot_distance = ifelse(game_id == "0021500548" & game_event_id == 112, 27, shot_distance),
+         shot_distance = ifelse(game_id == "0021500504" & game_event_id == 535, 13, shot_distance)) %>% 
+  filter(quarter == period) %>% 
+  rename(shooter_id = player_id, shot_team_id = team_id, event_id = game_event_id)
+```
+
+
+## feature engineering
+
+# total distance from hoop
+```{r tot distance from hoop}
+
+#calculate euclidean distance from hoop of all players on court and ball
+movement <- movement %>% 
+  mutate(x_dist_from_hoop_L = x_loc-5.35,
+          x_dist_from_hoop_R = x_loc-88.65,
+          y_dist_from_hoop = y_loc - 25,
+          tot_dist_from_hoop = sqrt(((ifelse(x_dist_from_hoop_L < 41.65, x_dist_from_hoop_L, x_dist_from_hoop_R))^2)+(y_dist_from_hoop^2))
+         ) %>% 
+  select(game_id, 1:4, tot_dist_from_hoop, everything())
+```
+
+
+# find the game clock time for each shot attempt
+
+The movement df has accurate times but does not have a reliable event id. The shots df has accurate event id's but does not have reliable times. To join these two df's, the unreliable shot times will be cross referenced against a window of time in the movement df, to find a closer estimate to the exact moment a shot attempt began.
+```{r shot window}
+#create new clock variables with quarter and game_clock combined for whole seconds and hundredths of seconds in movement df
+movement_join <- movement %>% 
+   mutate(event_clock = floor(game_clock),
+          q_event_clock = event_clock + quarter*1000,
+          q_game_clock = game_clock + quarter*1000
+         ) %>% 
+  unite("join_clock", c(game_id, q_event_clock), sep = "", remove = FALSE) %>%
+  mutate(join_clock = as.numeric(join_clock)) %>% 
+  select(everything(), join_clock)
+
+#from shots df, create new df with new id made from game_id and quater + whole seconds
+shots_join <- shots %>% 
+  mutate(q_event_clock = eventtime + quarter*1000) %>% 
+  unite("join_clock", c(game_id, q_event_clock), sep = "", remove = FALSE) %>% 
+  mutate(join_clock = as.numeric(join_clock)) %>% 
+  select(everything(), join_clock)
+
+#from shots df, create new df with times corresponding to 7 sec window during which shot was closest to hoop
+shot_times <- shots_join %>% 
+  mutate(join_clock_m1 = join_clock-1,
+         join_clock_1 = join_clock+1,
+         join_clock_2 = join_clock+2,
+         join_clock_3 = join_clock+3,
+         join_clock_4 = join_clock+4,
+         join_clock_5 = join_clock+5,
+         join_clock_6 = join_clock+6) %>% 
+  select(join_clock_m1, join_clock_0 = join_clock, join_clock_1, join_clock_2, join_clock_3, join_clock_4, join_clock_5, join_clock_6, event_id, game_id, shot_distance, action_type, everything()) %>% 
+  pivot_longer(cols = c(join_clock_m1, join_clock_0, join_clock_1, join_clock_2, join_clock_3, join_clock_4, join_clock_5, join_clock_6), values_to = 'join_clock')
+
+shot_times_no_overlap <- shot_times %>%
+  group_by(join_clock) %>% 
+  summarise(event_id = min(event_id))
+
+shot_times_clean <- shot_times_no_overlap %>% 
+  left_join(shot_times, by = c('join_clock', 'event_id')) %>% 
+  filter(eventtime > 0)
+
+#create list of all times in all shot windows 
+shot_times_list <- shot_times_clean$join_clock
+
+#create df from shots df with relevant columns at front for calculating shot release time in movement df
+shot_times_events <- shot_times_clean %>% 
+  select(event_id, join_clock, shot_distance, action_type, everything()) %>% 
+  arrange(game_id, event_id)
+
+#create df combining movement and shots dfs with shot windows for all shots, filtering for just rows tracking the ball
+shot_windows_all <- movement_join %>% 
+  filter(join_clock %in% shot_times_list) %>%
+  left_join(shot_times_events, by = c('join_clock', 'game_id')) %>% 
+  filter(player_id == -1) %>% 
+  select(join_clock, event_id, tot_dist_from_hoop, shot_distance, action_type, everything())
+
+```
+
+
+```{r min distance to hoop}
+#create new df with the ball's minimum distance from the hoop for each event
+min_dists <- shot_windows_all %>% 
+  group_by(event_id, game_id) %>% 
+  summarise(min_dist = min(tot_dist_from_hoop)) %>% 
+  #filter(min_dist < 6) %>% 
+  arrange(event_id)
+
+min_dists_clean <- min_dists %>% 
+  left_join(shots_join, by = c('game_id', 'event_id')) %>% 
+  filter(shot_distance > min_dist | shot_distance == 0 & min_dist < 1) %>% 
+  mutate(min_dist_flag = 1) %>% 
+  select(game_id, event_id, min_dist, min_dist_flag)
+
+#create new df ensuring multiple events do not have the same minimum distance (could be matched incorrectly when shot windows overlap)
+# min_dists_clean <- min_dists %>% 
+#   group_by(min_dist) %>% 
+#   summarise(event_id = min(event_id)) %>% 
+#   mutate(min_dist_flag = 1) %>% 
+#   arrange(event_id)
+
+```
+
+
+# release times
+
+With the time identified for when each shot was closest to the hoop, the next step is to calculate the release of the shot attempt based on the distance of the shot in the shots df. Times are manually collected from game highlights.
+```{r times to hoop data collection}
+#create new df with shot attempts from a single game
+shots_010216 <- shots_join %>% 
+  filter(game_id == "0021500504") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+#create new df with the observed time of highlight shots from the beginning of the upward shooting motion to the ball contacting the hoop
+shot_times_010216 <- shots_010216 %>% 
+  mutate(upward_to_hoop_time = case_when(event_id == 15 ~ 1.56,
+                                         event_id == 23 ~ 1.63,
+                                         event_id == 46 ~ .4,
+                                         event_id == 55 ~ 1.76,
+                                         event_id == 208 ~ 1.7,
+                                         event_id == 237 ~ 1.55,
+                                         event_id == 324 ~ .5,
+                                         event_id == 396 ~ 1.57, 
+                                         event_id == 462 ~ 1.2,
+                                         #event_id == 468 ~ 1.1,
+                                         event_id == 496 ~ .65,
+                                         event_id == 499 ~ 1.4,
+                                         event_id == 501 ~ 1.08,
+                                         event_id == 535 ~ 1.3,
+                                         event_id == 537 ~ .7,
+                                         #event_id == 552 ~ 1.1
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+
+shots_010416 <- shots_join %>% 
+  filter(game_id == "0021500520") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+shot_times_010416 <- shots_010416 %>% 
+  mutate(upward_to_hoop_time = case_when(event_id == 127 ~ 1.38,
+                                         event_id == 132 ~ 1.4,
+                                         event_id == 260 ~ .55,
+                                         event_id == 310 ~ 1.5,
+                                         event_id == 393 ~ 1.70
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+
+shots_010516 <- shots_join %>% 
+  filter(game_id == "0021500524") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+shot_times_010516 <- shots_010516 %>% 
+  mutate(upward_to_hoop_time = case_when(event_id == 81 ~ 1.57,
+                                         event_id == 102 ~ 1.57,
+                                         event_id == 121 ~ .75,
+                                         event_id == 321 ~ 1.16,
+                                         event_id == 348 ~ 1.49
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+
+shots_010816 <- shots_join %>% 
+  filter(game_id == "0021500548") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+shot_times_010816 <- shots_010816 %>% 
+  mutate(upward_to_hoop_time = case_when(event_id == 63 ~ .9,
+                                         event_id == 78 ~ 1.65,
+                                         event_id == 102 ~ 1.64,
+                                         event_id == 112 ~ 1.7,
+                                         event_id == 193 ~ 1.58,
+                                         event_id == 210 ~ .27,
+                                         event_id == 284 ~ 1.58,
+                                         event_id == 325 ~ 1.51,
+                                         event_id == 340 ~ .32,
+                                         event_id == 393 ~ 1.56,
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+
+shots_010916 <- shots_join %>% 
+  filter(game_id == "0021500556") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+shot_times_010916 <- shots_010916 %>% 
+  mutate(upward_to_hoop_time = case_when(event_id == 96 ~ .83,
+                                         event_id == 196 ~ .94,
+                                         event_id == 102 ~ 1.64,
+                                         event_id == 259 ~ 1.59,
+                                         event_id == 316 ~ .41,
+                                         event_id == 458 ~ 1.59,
+                                         event_id == 474 ~ 1.10,
+                                         event_id == 492 ~ 1.67
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+
+shots_011116 <- shots_join %>% 
+  filter(game_id == "0021500568") %>% 
+  select(event_id, q = quarter, mins = minutes_remaining, secs = seconds_remaining, player = player_name, dist = shot_distance, q_event_clock, everything()) %>% 
+  arrange(event_id)
+
+shot_times_011116 <- shots_011116 %>% 
+  mutate(upward_to_hoop_time = case_when(#event_id == 66 ~ 1.21,
+                                         event_id == 92 ~ 1.43,
+                                         event_id == 119 ~ 1.25,
+                                         event_id == 189 ~ .56,
+                                         event_id == 202 ~ .74,
+                                         event_id == 248 ~ .71,
+                                         event_id == 301 ~ .92,
+                                         event_id == 336 ~ 1.60,
+                                         event_id == 417 ~ 1.31,
+                                         event_id == 463 ~ 1.65,
+                                         event_id == 479 ~ 1.60,
+                                         event_id == 506 ~ 1.59,
+                                         )) %>% 
+  filter(!is.na(upward_to_hoop_time))
+
+#combine single game dfs
+times_to_hoop <- bind_rows(shot_times_010216, shot_times_010416, shot_times_010516, shot_times_010816, shot_times_010916, shot_times_011116) %>% 
+  filter(!str_detect(action_type, "Alley Oop"),
+         !str_detect(action_type, "Tip")) %>% 
+  select(dist, upward_to_hoop_time, everything())
+
+```
+
+
+# model ball flight times
+
+With a sample of 50 shot attempts, run a linear model to predict the typical time from upward shooting motion to ball nearest hoop for all shot distances
+```{r times to hoop regression}
+
+#create linear model
+tth_model <- lm(upward_to_hoop_time ~ dist, data = times_to_hoop)
+
+#get summary stats
+get_regression_summaries(tth_model)
+
+```
+
+```{r regression plot}
+
+#plot linear regression
+ggplot(times_to_hoop, aes(x = dist, y = upward_to_hoop_time)) +
+  geom_point() +
+  geom_parallel_slopes(se = TRUE)
+```
+
+```{r predictions}
+
+#create df with all potentail distances
+new_dist <- data.frame(dist = 0:51)
+
+#fill df with predicted times for distances
+get_regression_points(tth_model, newdata = new_dist)
+```
+
+
+
+
+# extracting relevant rows at time of shot attempt
+```{r calculate shot attempt times}
+
+#create new df with unique shot attempt times based on 
+shot_attempt_times_010216 <- shot_windows_all %>% 
+  left_join(min_dists_clean, by = c("event_id", "tot_dist_from_hoop" = "min_dist")) %>% 
+  mutate(q_release_time = ifelse(min_dist_flag == 1, (quarter.x*1000)+
+                                   (game_clock + case_when(str_detect(action_type, "Alley Oop") ~ .25,
+                                                           str_detect(action_type, "Tip") ~ .4,
+                                                           shot_distance == 0 ~ .5,
+                                                           shot_distance == 1 ~ .6,
+                                                           shot_distance == 2 ~ .787,
+                                                           shot_distance == 3 ~ .824,
+                                                           shot_distance == 4 ~ .861,
+                                                           shot_distance == 5 ~ .898,
+                                                           shot_distance == 6 ~ .935,
+                                                           shot_distance == 7 ~ .973,
+                                                           shot_distance == 8 ~ 1.01,
+                                                           shot_distance == 9 ~ 1.047,
+                                                           shot_distance == 10 ~ 1.084,
+                                                           shot_distance == 11 ~ 1.122,
+                                                           shot_distance == 12 ~ 1.159,
+                                                           shot_distance == 13 ~ 1.196,
+                                                           shot_distance == 14 ~ 1.233,
+                                                           shot_distance == 15 ~ 1.271,
+                                                           shot_distance == 16 ~ 1.308,
+                                                           shot_distance == 17 ~ 1.345,
+                                                           shot_distance == 18 ~ 1.382,
+                                                           shot_distance == 19 ~ 1.42,
+                                                           shot_distance == 20 ~ 1.457,
+                                                           shot_distance == 21 ~ 1.494,
+                                                           shot_distance == 22 ~ 1.531,
+                                                           shot_distance == 23 ~ 1.569,
+                                                           shot_distance == 24 ~ 1.606,
+                                                           shot_distance == 25 ~ 1.643,
+                                                           shot_distance == 26 ~ 1.68,
+                                                           shot_distance == 27 ~ 1.717,
+                                                           shot_distance == 28 ~ 1.755,
+                                                           shot_distance == 29 ~ 1.792,
+                                                           shot_distance == 30 ~ 1.829,
+                                                           shot_distance == 31 ~ 1.866,
+                                                           shot_distance == 32 ~ 1.904,
+                                                           shot_distance == 33 ~ 1.941,
+                                                           shot_distance == 34 ~ 1.978,
+                                                           shot_distance == 35 ~ 2.015,
+                                                           shot_distance == 36 ~ 2.053,
+                                                           shot_distance == 37 ~ 2.09,
+                                                           shot_distance == 38 ~ 2.127,
+                                                           shot_distance == 39 ~ 2.164,
+                                                           shot_distance == 40 ~ 2.202,
+                                                           shot_distance == 41 ~ 2.239,
+                                                           shot_distance == 42 ~ 2.276,
+                                                           shot_distance == 43 ~ 2.313,
+                                                           shot_distance == 44 ~ 2.350,
+                                                           shot_distance == 45 ~ 2.388,
+                                                           shot_distance == 46 ~ 2.425,
+                                                           shot_distance == 47 ~ 2.462
+                                    )
+                                                                       ))
+         ) %>% 
+  filter(!is.na(q_release_time)) %>% 
+  select(q_release_time)
+
+```
+
+
+```{r loop}
+# run loop to find the closest match to each shot attempt time estimate
+shot_rows <- data.frame('game_id'=character(), 'q_game_clock'=double())
+current_row <- NA
+for(i in shot_attempt_times_010216$q_release_time){
+  current_row <- shot_windows_all %>% 
+    filter(row_number()==which.min(abs(q_game_clock-i))) %>% 
+    select(game_id, q_game_clock)
+  shot_rows <- bind_rows(shot_rows, current_row)
+}
+
+# new df filtering for only correct times
+shot_attempts_010216 <- movement_join %>% 
+  filter(q_game_clock %in% shot_rows$q_game_clock)
+```
+
+
+```{r}
+p_id_list <- rep(c(-1, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'), 173)
+
+shot_attempts_010216 <- add_column(shot_attempts_010216, p_id_list, .after = "team_id")
+```
+
+```{r}
+shot_attempts_010216_wide <- shot_attempts_010216 %>% 
+  pivot_wider(names_from = p_id_list, values_from = c(player_id, team_id, x_loc, y_loc)) %>% 
+  replace(is.na(.), 0) %>% 
+  group_by(q_game_clock, game_id, join_clock) %>%
+  summarise(ball_id = min(`player_id_-1`), ball_team_id = min(`team_id_-1`), ball_x_loc = max(`x_loc_-1`), ball_y_loc = max(`y_loc_-1`),
+            p1_id = max(player_id_p1), p1_team_id = max(team_id_p1), p1_x_loc = max(x_loc_p1), p1_y_loc = max(y_loc_p1), 
+            p2_id = max(player_id_p2), p2_team_id = max(team_id_p2), p2_x_loc = max(x_loc_p2), p2_y_loc = max(y_loc_p2),
+            p3_id = max(player_id_p3), p3_team_id = max(team_id_p3), p3_x_loc = max(x_loc_p3), p3_y_loc = max(y_loc_p3),
+            p4_id = max(player_id_p4), p4_team_id = max(team_id_p4), p4_x_loc = max(x_loc_p4), p4_y_loc = max(y_loc_p4),
+            p5_id = max(player_id_p5), p5_team_id = max(team_id_p5), p5_x_loc = max(x_loc_p5), p5_y_loc = max(y_loc_p5),
+            p6_id = max(player_id_p6), p6_team_id = max(team_id_p6), p6_x_loc = max(x_loc_p6), p6_y_loc = max(y_loc_p6),
+            p7_id = max(player_id_p7), p7_team_id = max(team_id_p7), p7_x_loc = max(x_loc_p7), p7_y_loc = max(y_loc_p7),
+            p8_id = max(player_id_p8), p8_team_id = max(team_id_p8), p8_x_loc = max(x_loc_p8), p8_y_loc = max(y_loc_p8),
+            p9_id = max(player_id_p9), p9_team_id = max(team_id_p9), p9_x_loc = max(x_loc_p9), p9_y_loc = max(y_loc_p9),
+            p10_id = max(player_id_p10), p10_team_id = max(team_id_p10), p10_x_loc = max(x_loc_p10), p10_y_loc = max(y_loc_p10))
+```
+
+
+```{r}
+shot_attempts_010216_final <- shot_attempts_010216_wide %>% 
+  left_join(shot_times_clean, by = c("join_clock", "game_id"))
+```
+
+
+```{r}
+shot_attempts_010216_final %>% 
+  arrange(event_id)
+```
+
+
+

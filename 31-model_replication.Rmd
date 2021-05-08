@@ -1,0 +1,136 @@
+---
+title: "replicate results"
+output: html_document
+---
+
+```{r}
+set.seed(1234567)
+shots_split_strat_2 <- initial_split(less_than_two, prop = 3/5)
+shots_train_strat_2 <- training(shots_split_strat_2)
+shots_test_strat_2 <- testing(shots_split_strat_2)
+
+#nrow(shots_train_strat_2)/nrow(less_than_two)
+#nrow(shots_test_strat)/nrow(less_than_two)
+```
+
+
+```{r oversample}
+# n rows of missed 2PT shots. Make this 1/4 of modeling df
+missed_twos_2 <- shots_train_strat_2 %>% 
+  filter(shot_type == "2PT Field Goal", made_missed == 0)
+
+#made 2PT
+made_twos_2 <- shots_train_strat_2 %>% 
+  filter(shot_type == "2PT Field Goal", made_missed == 1)
+
+made_twos_samp_2 <- made_twos_2[sample(nrow(made_twos_2), nrow(missed_twos_2), replace = TRUE),]
+
+#missed 3PT
+missed_threes_2 <- shots_train_strat_2 %>% 
+  filter(shot_type == "3PT Field Goal", made_missed == 0)
+
+missed_threes_samp_2 <- missed_threes_2[sample(nrow(missed_threes_2), nrow(missed_twos_2), replace = TRUE),]
+
+#made 3PT
+made_threes_2 <- shots_train_strat_2 %>% 
+  filter(shot_type == "3PT Field Goal", made_missed == 1)
+
+made_threes_samp_2 <- made_threes_2[sample(nrow(made_threes_2), nrow(missed_twos_2), replace = TRUE),]
+
+strat_sample_2 <- bind_rows(missed_twos_2, made_twos_samp_2, made_threes_samp_2, missed_threes_samp_2)
+
+
+
+
+
+
+```
+
+
+
+#gbm
+```{r}
+strat_regression_train_2 <- strat_sample_2 %>% 
+  select(points, shot_type_num, efg, fga, shot_type_num, shot_zone_basic, shooter_to_hoop, rim_jump, nearest_def_dist_round, def_angle) %>% 
+  mutate(shot_zone_basic = as.factor(shot_zone_basic),
+         rim_jump = as.factor(rim_jump)
+  )
+
+
+strat_regression_test_2 <- shots_test_strat_2 %>% 
+  select(points, shot_type_num, efg, fga, shot_type_num, shot_zone_basic, shooter_to_hoop, rim_jump, nearest_def_dist_round, def_angle) %>% 
+  mutate(shot_zone_basic = as.factor(shot_zone_basic),
+         rim_jump = as.factor(rim_jump)
+  )
+```
+
+```{r}
+strat_gbm_2 <- gbm(points ~.,
+             data = strat_regression_train_2,
+             verbose = TRUE,
+             shrinkage = 0.001, 
+             # a shrinkage parameter applied to each tree in the expansion. 
+             # Also known as the learning rate or step-size reduction; 0.001 
+             # to 0.1 usually work, but a smaller learning rate typically 
+             # requires more trees.
+             interaction.depth = 2, 
+             # Integer specifying the maximum depth of each tree (i.e., the 
+             # highest level of variable interactions allowed). A value of 1 
+             # implies an additive model, a value of 2 implies a model with up
+             #  to 2-way interactions
+             #n.minobsinnode = 5,
+             # Integer specifying the minimum number of observations in the 
+             # terminal nodes of the trees. Note that this is the actual number 
+             # of observations, not the total weight.
+             n.trees = 5000, 
+             # Integer specifying the total number of trees to fit. This is 
+             # equivalent to the number of iterations and the number of basis 
+             # functions in the additive expansion.
+             cv.folds = 10
+             # Number of cross-validation folds to perform. If cv.folds>1 then
+             # gbm, in addition to the usual fit, will perform a 
+             # cross-validation, calculate an estimate of generalization error
+             #  returned in cv.error
+             )
+```
+
+```{r}
+perf_strat_gbm_2 = gbm.perf(strat_gbm_2, method = "cv")
+```
+
+```{r}
+gbm_predictions_2 <- predict(strat_gbm_2,
+                           newdata = strat_regression_test_2,
+                           n.trees = perf_strat_gbm_2)
+
+rmse_gbm_2 <- rmse(actual = strat_regression_test_2$points,
+                  predicted = gbm_predictions_2)
+rmse_gbm_2
+
+```
+
+```{r}
+gbm_labels_df_2 <- as.data.frame(gbm_predictions_2) %>% 
+  mutate(gbm_pred = as_numeric(gbm_predictions_2)) %>% 
+  select(gbm_pred)
+
+gbm_pred_test_2 <- bind_cols(gbm_labels_df_2, shots_test_strat_2)
+
+gbm_pred_test_grouped_2 <- gbm_pred_test_2 %>% 
+  group_by(player_name) %>% 
+  summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2) %>% 
+  arrange(-n)
+
+gbm_player_rmse_2 <- rmse(actual = gbm_pred_test_grouped_2$pps,
+                  predicted = gbm_pred_test_grouped_2$pps_pred)
+
+gbm_player_rmse_2
+
+write.csv(gbm_pred_test_2, 'gbm_pred_test_2.csv', row.names = FALSE)
+saveRDS(strat_gbm_2, "strat_gbm_2.rds")
+```
+
+
+```{r}
+gbm_summary <- summary(strat_gbm_2)
+```
