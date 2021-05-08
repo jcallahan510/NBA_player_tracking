@@ -16,7 +16,6 @@ stats16_17 <- read_csv("data/stats16_17.csv") %>%
 ```
 
 
-
 ```{r}
 #group to player level and create aggregate eFG% features
 gbm_pred_test_grouped_2 <- gbm_pred_test_2 %>% 
@@ -39,16 +38,9 @@ dev.off()
 ```
 
 
-
-
 ```{r}
-filter_50 <- gbm_pred_test_grouped_2 %>% 
-  mutate(difference = pred_efg - sample_efg) %>% 
-  filter(n >= 50) %>% 
-  arrange(difference)
-```
+#double density plot
 
-```{r}
 ggplot() +
   geom_density(aes(x = sample_efg), colour = "red", data = filter_50) + 
   geom_density(aes(x = pred_efg), colour = "blue", data = filter_50) +
@@ -66,36 +58,8 @@ ggsave("observed_vs_pred.png")
 
 
 ```{r}
-gbm_pred_test_grouped_2 %>% 
-  mutate(difference = sample_efg - pred_efg) %>% 
-  filter(n > 50) %>% 
-  arrange(difference)
-```
+#cleaning summary output for plot
 
-
-```{r}
-gbm_pred_test_2 %>% 
-  summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2)
-```
-
-
-
-```{r}
-gbm_pred_test_2 %>% 
-  filter(gbm_pred >= 1)
-
-
-tabyl(gbm_pred_test_2$shot_zone_basic)
-```
-
-
-
-
-
-
-
-
-```{r}
 gbm_summary <- gbm_summary %>% 
   mutate(Feature = case_when(var == "shot_zone_basic" ~ "Shot Location",
                          var == "nearest_def_dist_round" ~ "Distance from Nearest Defender",
@@ -114,6 +78,8 @@ gbm_summary <- gbm_summary %>%
 
 
 ```{r}
+#plotting gbm features
+
 ggplot(gbm_summary, aes(x = reorder(Feature, `Relative Influence`), y = `Relative Influence`)) +
   geom_bar(stat = "identity", fill = 'lightseagreen', colour = "black") +
   xlab("Feature") +
@@ -125,26 +91,14 @@ ggsave('features.png', height = 7, width = 10.5)
 ```
 
 
-
-
-
-
-
 ```{r}
-gbm_pred_test_grouped_2 <- gbm_pred_test_grouped_2 %>% 
-  mutate(difference = sample_efg - pred_efg)
 
 sd(gbm_pred_test_grouped_2$sample_efg)
-
-
-gbm_pred_test_grouped_2 %>% 
-  filter(n > 99) %>% 
-  arrange(difference)
-  
 ```
 
 
 ```{r}
+#plot volume against difference in prediction
 ggplot(gbm_pred_test_grouped_2, aes(x = gbm_pred_test_grouped_2$n, y = gbm_pred_test_grouped_2$difference)) +
   geom_point(size = 3, alpha = .75, col = "lightseagreen") +
   geom_smooth(col = "black", method = lm, se = FALSE) +
@@ -158,7 +112,6 @@ ggsave('volume.png', height = 7, width = 10.5)
 ```
 
 
-
 ```{r}
 filter_100 <- gbm_pred_test_grouped_2 %>% 
   mutate(difference = pred_efg - sample_efg) %>% 
@@ -167,6 +120,7 @@ filter_100 <- gbm_pred_test_grouped_2 %>%
 ```
 
 ```{r}
+#create df showing predicted and observed increases or decreases
 filter_100 %>% 
   left_join(stats16_17, by = c('player_name' = 'player')) %>% 
   select(player_name, n, sample_efg, pred_efg, difference, x1617_efg = e_fg_percent) %>% 
