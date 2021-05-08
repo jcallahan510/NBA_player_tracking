@@ -116,7 +116,7 @@ confusionMatrix(y_factor, factor_points_test$points)
 
 #stratisfy sample
 ```{r}
-set.seed(12345)
+set.seed(123456)
 shots_split_strat <- initial_split(less_than_two, prop = 3/5)
 shots_train_strat <- training(shots_split_strat)
 shots_test_strat <- testing(shots_split_strat)
@@ -280,8 +280,37 @@ gbm_predictions <- predict(strat_gbm,
 
 rmse_gbm <- rmse(actual = strat_regression_test$points,
                   predicted = gbm_predictions)
-print(rmse_gbm)
+rmse_gbm
 ```
+
+```{r}
+gbm_labels_df <- as.data.frame(gbm_predictions) %>% 
+  mutate(gbm_pred = as_numeric(gbm_predictions)) %>% 
+  select(gbm_pred)
+
+gbm_pred_test <- bind_cols(gbm_labels_df, shots_test_strat)
+
+gbm_pred_test_grouped <- gbm_pred_test %>% 
+  group_by(player_name) %>% 
+  summarise(n = n(), pps = sum(points)/n, pps_pred = sum(gbm_pred)/n, sample_efg = pps/2, pred_efg = pps_pred/2) %>% 
+  arrange(-n)
+
+gbm_player_rmse <- rmse(actual = gbm_pred_test_grouped$pps,
+                  predicted = gbm_pred_test_grouped$pps_pred)
+
+gbm_player_rmse
+
+write.csv(gbm_pred_test, 'gbm_pred_test.csv', row.names = FALSE)
+```
+
+
+```{r}
+summary(strat_gbm)
+```
+
+
+
+
 
 
 
@@ -384,6 +413,12 @@ print(rmse_gbm)
 
 
 
+
+
+
+
+
+#lm with stratified sample
 ```{r}
 strat_lm <- lm(points ~ shot_type_num * efg * fga + shot_type_num + shot_zone_basic + shooter_to_hoop + rim_jump + nearest_def_dist_round * def_angle, data = shots_train_strat)
 
